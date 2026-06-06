@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { error } = await supabase.from("leads").insert({
+  const leadRow = {
     name,
     platform: "Application Form",
     contact_link: email,
@@ -74,7 +74,14 @@ Deno.serve(async (req) => {
     next_action: "Review application & book call",
     notes,
     affordability_ok: true,
-  });
+  };
+
+  // de-dupe: if a lead with this email already exists, update it instead of creating a duplicate
+  const { data: existing } = await supabase.from("leads").select("id").eq("contact_link", email).limit(1);
+  const op = existing && existing.length
+    ? supabase.from("leads").update({ ...leadRow, notes: notes + "\n\n[Re-applied " + new Date().toISOString().slice(0, 10) + "]" }).eq("id", existing[0].id)
+    : supabase.from("leads").insert(leadRow);
+  const { error } = await op;
 
   if (error)
     return new Response(JSON.stringify(error), {
