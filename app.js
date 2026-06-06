@@ -75,9 +75,9 @@ function renderAuth(mode = "signin") {
     <h1>${mode === "signin" ? "Sign in" : "Create account"}</h1>
     <p class="sub">${mode === "signin" ? "Welcome back. Log in to your pipeline." : "Set up your login. Ask Ayden to set your role after."}</p>
     <div id="msg"></div>
-    ${mode === "signup" ? field("Full name", `<input id="f_name" placeholder="Jordan Smith"/>`) : ""}
-    ${field("Email", `<input id="f_email" type="email" placeholder="you@shevlinmarketing.org"/>`)}
-    ${field("Password", `<input id="f_pass" type="password" placeholder="••••••••"/>`)}
+    ${mode === "signup" ? field("Full name", `<input id="f_name" name="name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" placeholder="Jordan Smith"/>`) : ""}
+    ${field("Email", `<input id="f_email" name="email" type="email" inputmode="email" autocomplete="${mode === "signin" ? "username" : "email"}" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="you@shevlinmarketing.org"/>`)}
+    ${field("Password", `<input id="f_pass" name="password" type="password" autocomplete="${mode === "signin" ? "current-password" : "new-password"}" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="••••••••"/>`)}
     <button class="btn" id="go">${mode === "signin" ? "Sign in" : "Create account"}</button>
     <div class="switch-line">
       ${mode === "signin" ? `New here? <b id="sw">Create an account</b>` : `Already have one? <b id="sw">Sign in</b>`}
