@@ -85,7 +85,7 @@ function renderAuth(mode = "signin") {
   </div></div>`;
   document.getElementById("sw").onclick = () => renderAuth(mode === "signin" ? "signup" : "signin");
   document.getElementById("go").onclick = () => (mode === "signin" ? doSignin() : doSignup());
-  app.querySelectorAll("input").forEach((i) => (i.onkeydown = (e) => e.key === "Enter" && document.getElementById("go").click()));
+  app.querySelectorAll("input").forEach((i) => (i.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("go").click(); } }));
 }
 const field = (label, inner) => `<div class="field"><label>${label}</label>${inner}</div>`;
 const msg = (t, cls = "err") => (document.getElementById("msg").innerHTML = `<div class="${cls}">${esc(t)}</div>`);
