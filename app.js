@@ -82,6 +82,7 @@ function renderAuth(mode = "signin") {
     <div class="switch-line">
       ${mode === "signin" ? `New here? <b id="sw">Create an account</b>` : `Already have one? <b id="sw">Sign in</b>`}
     </div>
+    <div class="muted" style="text-align:center;margin-top:16px;font-size:11px;letter-spacing:.05em">build 4</div>
   </div></div>`;
   document.getElementById("sw").onclick = () => renderAuth(mode === "signin" ? "signup" : "signin");
   document.getElementById("go").onclick = () => (mode === "signin" ? doSignin() : doSignup());
