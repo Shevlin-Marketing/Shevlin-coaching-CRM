@@ -478,10 +478,9 @@
       submittedAt: new Date().toLocaleString('en-GB')
     };
 
-    // ---- ALSO CREATE A LEAD IN THE CRM (Supabase) ----
-    // Fill these two values from your CRM's config.js (Supabase -> Project Settings -> API):
-    const SUPA_URL  = 'https://wuugikbtlmdyfgvuopic.supabase.co';   // your Project URL
-    const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1dWdpa2J0bG1keWZndnVvcGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDEyNjAsImV4cCI6MjA5NjE3NzI2MH0.sixcaadSfQ6CGXKDGBD98nj7u_iF2ps10CDxuJ3ezYs';                       // your anon / public key
+    // ---- CRM LEAD (DEBUG: shows result on screen) ----
+    const SUPA_URL  = 'https://wuugikbtlmdyfgvuopic.supabase.co';
+    const SUPA_ANON = 'sb_publishable_po2MbZdw3YpW2Fhx9yhlkA_1bEmmFgm';
     fetch(SUPA_URL + '/rest/v1/leads', {
       method: 'POST',
       headers: {
@@ -510,7 +509,9 @@
           'Extra: ' + data.extra + '\n' +
           'Submitted: ' + data.submittedAt
       })
-    }).catch(() => {});
+    })
+    .then(function(r){ return r.text().then(function(t){ alert('CRM RESULT: ' + r.status + (t ? ('\n' + t) : '\n(empty = success)')); }); })
+    .catch(function(e){ alert('CRM ERROR: ' + e.message); });
     // ---- END CRM LEAD ----
 
     // Send to Formspree (free form backend — replace mrejdprg with your Formspree endpoint)
