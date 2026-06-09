@@ -190,3 +190,9 @@ a{color:inherit}
   .row2{grid-template-columns:1fr}
   .page-head h2{font-size:24px}
 }
+
+.projsel{width:100%;margin-bottom:4px}
+
+.tl-row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.tl-row:last-child{border-bottom:none}
+.tl-dot{width:7px;height:7px;border-radius:50%;background:var(--red);margin-top:6px;flex:0 0 auto;box-shadow:0 0 8px var(--red)}
