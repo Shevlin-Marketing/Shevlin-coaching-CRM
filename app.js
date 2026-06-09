@@ -7,6 +7,7 @@ const LEAD_STATUS = [
   ["responding", "Responding"],
   ["details_shared", "Details Shared"],
   ["form_submitted", "Form Submitted"],
+  ["converted", "Converted ✓"],
   ["not_interested", "Not Interested"],
   ["dormant", "Dormant"],
 ];
@@ -42,9 +43,12 @@ const initials = (n) => (n || "?").trim().split(/\s+/).map((x) => x[0]).join("")
 const MARK = `<img class="mark" src="logo.png" alt="Shevlin Coaching" />`;
 
 // ---------- state ----------
-const state = { user: null, profile: null, profiles: [], projects: [], currentProject: "all", view: "dashboard", leadView: "kanban", dealView: "kanban", range: "30d", activitiesOk: true };
+const state = { user: null, profile: null, profiles: [], projects: [], teams: [], currentProject: "all", view: "dashboard", leadView: "kanban", dealView: "kanban", range: "30d", activitiesOk: true };
 const app = document.getElementById("app");
-const isStaff = () => ["coach", "admin"].includes(state.profile?.role);
+const isStaff = () => ["coach", "team_leader", "business_partner", "admin"].includes(state.profile?.role);
+const ROLES = [["setter", "Setter"], ["closer", "Closer"], ["coach", "Coach"], ["team_leader", "Team Leader"], ["business_partner", "Business Partner"], ["admin", "Owner / Admin"]];
+const roleLabel = (r) => (ROLES.find((x) => x[0] === r) || [r, r])[1];
+const teamName = (id) => state.teams.find((t) => t.id === id)?.name || "—";
 
 // ---------- date helpers ----------
 function rangeStart(r = state.range) {
@@ -118,6 +122,8 @@ async function loadAndRender() {
   state.profiles = all || [];
   const { data: projects } = await supabase.from("projects").select("*").eq("status", "active").order("name");
   state.projects = projects || [];
+  const teamsRes = await supabase.from("teams").select("*").order("name");
+  state.teams = teamsRes.error ? [] : (teamsRes.data || []);
   if (state.currentProject !== "all" && !state.projects.some((p) => p.id === state.currentProject)) state.currentProject = "all";
   renderShell();
 }
@@ -141,7 +147,7 @@ function renderAuth(mode = "signin") {
     ${field("Password", `<input id="f_pass" name="password" type="password" autocomplete="${mode === "signin" ? "current-password" : "new-password"}" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="••••••••"/>`)}
     <button class="btn" id="go">${mode === "signin" ? "Sign in" : "Create account"}</button>
     <div class="switch-line">${mode === "signin" ? `New here? <b id="sw">Create an account</b>` : `Already have one? <b id="sw">Sign in</b>`}</div>
-    <div class="muted" style="text-align:center;margin-top:16px;font-size:11px;letter-spacing:.05em">build 8</div>
+    <div class="muted" style="text-align:center;margin-top:16px;font-size:11px;letter-spacing:.05em">build 10</div>
   </div></div>`;
   document.getElementById("sw").onclick = () => renderAuth(mode === "signin" ? "signup" : "signin");
   document.getElementById("go").onclick = () => (mode === "signin" ? doSignin() : doSignup());
@@ -171,8 +177,8 @@ function renderShell() {
     ["deals", "Deals — Closer", icon("deal")],
   ];
   const manage = [];
-  if (isStaff()) manage.push(["team", "Team", icon("team")], ["reports", "Reports", icon("chart")]);
-  if (state.profile?.role === "admin") manage.push(["projects", "Projects", icon("proj")]);
+  if (isStaff()) manage.push(["team", "People", icon("team")], ["reports", "Reports", icon("chart")]);
+  if (state.profile?.role === "admin") manage.push(["projects", "Projects", icon("proj")], ["teams", "Teams", icon("org")]);
 
   const switcher = state.projects.length ? `<div class="navlbl">Project</div>
     <select class="minisel projsel" id="projSwitch">
@@ -209,6 +215,7 @@ function renderView() {
   if (state.view === "team") return renderTeam();
   if (state.view === "reports") return renderReports();
   if (state.view === "projects") return renderProjects();
+  if (state.view === "teams") return renderTeams();
 }
 function rangeSelect() {
   return `<select class="minisel" id="rangeSel">${RANGES.map(([v, t]) => `<option value="${v}" ${v === state.range ? "selected" : ""}>${t}</option>`).join("")}</select>`;
@@ -309,7 +316,7 @@ async function renderLeads() {
       <thead><tr><th>Name</th><th>Tier</th><th>Platform</th><th>Status</th><th>Owner</th><th>Next action</th></tr></thead>
       <tbody>${rows.map((l) => `<tr data-edit="${l.id}" data-name="${esc((l.name || "").toLowerCase())}" data-tier="${l.tier || ""}">
         <td class="name">${esc(l.name)}</td><td>${tierTag(l.tier)}</td><td>${esc(l.platform || "—")}</td>
-        <td><span class="tag ${l.status === "form_submitted" ? "hot" : LOST.includes(l.status) ? "lost" : ""}">${lbl(LEAD_STATUS, l.status)}</span></td>
+        <td><span class="tag ${l.status === "converted" ? "won" : l.status === "form_submitted" ? "hot" : LOST.includes(l.status) ? "lost" : ""}">${lbl(LEAD_STATUS, l.status)}</span></td>
         <td>${esc(ownerName(l.owner_id))}</td><td class="muted">${esc(l.next_action || "—")}</td></tr>`).join("")}
       </tbody></table></div>`);
     main.querySelectorAll("[data-edit]").forEach((tr) => (tr.onclick = () => leadModal(rows.find((r) => r.id === tr.dataset.edit))));
@@ -368,12 +375,18 @@ function leadModal(lead = null) {
   if (editing) loadTimeline("lead", lead.id);
 }
 
-async function convertLead(lead) {
-  if (!confirm(`Convert "${lead.name}" into a closer deal? This hands it to Ayden and marks the lead done.`)) return;
-  const { error: dErr } = await supabase.from("deals").insert({ contact_name: lead.name, tier: lead.tier, amount: tierAmount(lead.tier), stage: "call_booked", sourcing_setter: lead.owner_id, lead_id: lead.id, project_id: lead.project_id });
-  if (dErr) return alert("Could not create deal: " + dErr.message);
-  await supabase.from("leads").update({ converted: true }).eq("id", lead.id);
-  state.view = "deals"; renderShell();
+function convertLead(lead) {
+  openModal("Convert to deal", `
+    <p class="muted" style="margin:-6px 0 14px">Hand <b>${esc(lead.name)}</b> to the closer. Pick who's taking the call — default is the setter, since they often close their own.</p>
+    ${field("Closer", select("cv_closer", state.profiles.map((p) => [p.id, p.full_name || "—"]), lead.owner_id || state.user.id))}
+    <p class="muted">${esc(ownerName(lead.owner_id))} keeps the sourcing credit either way. This lead will show as <b>Converted</b> in the setter pipeline.</p>
+  `, [{ label: "Convert →", cls: "", act: async () => {
+    const closer = val("cv_closer");
+    const { error: dErr } = await supabase.from("deals").insert({ contact_name: lead.name, tier: lead.tier, amount: tierAmount(lead.tier), stage: "call_booked", owner_id: closer, sourcing_setter: lead.owner_id, lead_id: lead.id, project_id: lead.project_id });
+    if (dErr) return msgModal("Could not create deal: " + dErr.message);
+    await supabase.from("leads").update({ converted: true, status: "converted" }).eq("id", lead.id);
+    closeModal(); state.view = "deals"; renderShell();
+  } }]);
 }
 
 // activity logging (leading indicators)
@@ -501,16 +514,93 @@ function dealModal(deal = null) {
 // ============================================================
 async function renderTeam() {
   const main = document.getElementById("main");
-  main.innerHTML = head("Team", "People");
+  main.innerHTML = head("People", "Team");
   const { data } = await supabase.from("profiles").select("*").order("full_name");
   const admin = state.profile?.role === "admin";
   main.insertAdjacentHTML("beforeend", `<div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Name</th><th>Role</th><th>Team</th></tr></thead>
     <tbody>${(data || []).map((p) => `<tr><td class="name">${esc(p.full_name || "—")}</td>
-      <td>${admin ? `<select class="minisel" data-role="${p.id}">${["setter", "closer", "coach", "admin"].map((r) => `<option value="${r}" ${r === p.role ? "selected" : ""}>${r}</option>`).join("")}</select>` : `<span class="tag">${esc(p.role)}</span>`}</td>
-      <td class="muted">${esc(p.team || "—")}</td></tr>`).join("")}</tbody></table></div>
-    <p class="muted" style="margin-top:12px">${admin ? "Change a role from the dropdown — it saves immediately." : "Only Ayden (admin) can change roles."}</p>`);
+      <td>${admin ? `<select class="minisel" data-role="${p.id}">${ROLES.map(([r, lab]) => `<option value="${r}" ${r === p.role ? "selected" : ""}>${lab}</option>`).join("")}</select>` : `<span class="tag">${esc(roleLabel(p.role))}</span>`}</td>
+      <td class="muted">${esc(teamName(p.team_id))}</td></tr>`).join("")}</tbody></table></div>
+    <p class="muted" style="margin-top:12px">${admin ? "Change a role from the dropdown — it saves immediately. Assign people to teams in the Teams tab." : "Only the Owner can change roles."}</p>`);
   if (admin) main.querySelectorAll("[data-role]").forEach((s) => (s.onchange = async () => { const { error } = await supabase.from("profiles").update({ role: s.value }).eq("id", s.dataset.role); if (error) alert(error.message); }));
+}
+
+// ============================================================
+// TEAMS (hierarchy — admin)
+// ============================================================
+async function renderTeams() {
+  const main = document.getElementById("main");
+  main.innerHTML = head("Teams", "Hierarchy", `<button class="btn sm" id="newTeam">+ New team</button>`);
+  document.getElementById("newTeam").onclick = () => teamModal();
+  main.insertAdjacentHTML("beforeend", `<div class="empty">Loading…</div>`);
+
+  const [{ data: teams }, { data: profiles }] = await Promise.all([
+    supabase.from("teams").select("*").order("name"),
+    supabase.from("profiles").select("id,full_name,role,team_id"),
+  ]);
+  const T = teams || [], P = profiles || [];
+  state.teams = T;
+  const memberCount = (tid) => P.filter((p) => p.team_id === tid).length;
+  const mgrName = (id) => P.find((p) => p.id === id)?.full_name || "—";
+
+  // render as an indented tree (roots first, then children)
+  const byParent = {}; T.forEach((t) => { (byParent[t.parent_team_id || "root"] ||= []).push(t); });
+  const rows = [];
+  const walk = (parent, depth) => (byParent[parent] || []).forEach((t) => {
+    rows.push(`<tr data-team="${t.id}"><td class="name" style="padding-left:${12 + depth * 22}px">${depth ? "↳ " : ""}${esc(t.name)}</td>
+      <td>${esc(mgrName(t.manager_id))}</td><td class="muted">${memberCount(t.id)}</td><td><button class="btn mini" data-edit-team="${t.id}">Manage</button></td></tr>`);
+    walk(t.id, depth + 1);
+  });
+  walk("root", 0);
+
+  main.innerHTML = head("Teams", "Hierarchy", `<button class="btn sm" id="newTeam2">+ New team</button>`);
+  document.getElementById("newTeam2").onclick = () => teamModal();
+  main.insertAdjacentHTML("beforeend", T.length ? `<div class="tbl-wrap fade"><table class="tbl">
+    <thead><tr><th>Team</th><th>Manager</th><th>Members</th><th></th></tr></thead>
+    <tbody>${rows.join("")}</tbody></table></div>
+    <p class="muted" style="margin-top:12px">Indented teams sit beneath their parent. A team's manager sees every lead and deal in that team and all teams beneath it.</p>`
+    : `<div class="empty">No teams yet. Create your top team (e.g. a Business Partner's team), then add teams beneath it.</div>`);
+  main.querySelectorAll("[data-edit-team]").forEach((b) => (b.onclick = () => teamModal(T.find((x) => x.id === b.dataset.editTeam), P)));
+}
+
+function teamModal(team = null, profiles = null) {
+  const editing = !!team;
+  const others = state.teams.filter((t) => t.id !== team?.id);
+  const inThisTeam = (profiles || []).filter((p) => p.team_id === team?.id).map((p) => p.id);
+  const setIds = new Set(inThisTeam);
+  openModal(`${editing ? "Manage team" : "New team"}`, `
+    ${field("Team name", `<input id="t_name" value="${esc(team?.name || "")}"/>`)}
+    <div class="row2">
+      ${field("Manager (runs this team)", select("t_mgr", [["", "—"]].concat(state.profiles.map((p) => [p.id, `${p.full_name || "—"} · ${roleLabel(p.role)}`])), team?.manager_id || ""))}
+      ${field("Parent team (optional)", select("t_parent", [["", "— none (top level)"]].concat(others.map((t) => [t.id, t.name])), team?.parent_team_id || ""))}
+    </div>
+    ${editing && profiles ? `<label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:6px 0 8px;font-family:var(--mono)">Members of this team</label>
+      <div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 12px">
+      ${state.profiles.map((u) => `<label class="check"><input type="checkbox" class="t_mem" value="${u.id}" ${setIds.has(u.id) ? "checked" : ""}/> ${esc(u.full_name || "—")} <span class="muted">· ${roleLabel(u.role)}</span></label>`).join("")}
+      </div>` : `<p class="muted">Create the team, then reopen it to assign members.</p>`}
+  `, [
+    { label: editing ? "Save" : "Create", cls: "", act: async () => {
+      const name = val("t_name");
+      if (!name) return msgModal("Team name is required.");
+      const row = { name, manager_id: val("t_mgr") || null, parent_team_id: val("t_parent") || null };
+      let tid = team?.id;
+      if (editing) { const { error } = await supabase.from("teams").update(row).eq("id", tid); if (error) return msgModal(error.message); }
+      else { const { data, error } = await supabase.from("teams").insert(row).select("id").single(); if (error) return msgModal(error.message); tid = data.id; }
+      if (editing && profiles) {
+        const checked = [...document.querySelectorAll(".t_mem:checked")].map((c) => c.value);
+        const after = new Set(checked);
+        const toAdd = checked.filter((id) => !inThisTeam.includes(id));
+        const toRemove = inThisTeam.filter((id) => !after.has(id));
+        for (const id of toAdd) await supabase.from("profiles").update({ team_id: tid }).eq("id", id);
+        for (const id of toRemove) await supabase.from("profiles").update({ team_id: null }).eq("id", id);
+      }
+      closeModal();
+      const { data: teams } = await supabase.from("teams").select("*").order("name");
+      state.teams = teams || [];
+      renderShell();
+    } },
+  ]);
 }
 
 // ============================================================
@@ -819,6 +909,7 @@ const icon = (n) => ({
   out: `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>`,
   proj: `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`,
   sun: `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,
+  org: `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v4M5 17v-2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2"/></svg>`,
 }[n] || "");
 const searchBox = (id) => `<div class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="${id}" placeholder="Search…" autocapitalize="none" autocorrect="off"/></div>`;
 
