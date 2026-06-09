@@ -8,6 +8,8 @@ const LEAD_STATUS = [
   ["details_shared", "Details Shared"],
   ["form_submitted", "Form Submitted"],
   ["converted", "Converted ✓"],
+  ["won", "Won 🏆"],
+  ["lost", "Lost"],
   ["not_interested", "Not Interested"],
   ["dormant", "Dormant"],
 ];
@@ -147,7 +149,7 @@ function renderAuth(mode = "signin") {
     ${field("Password", `<input id="f_pass" name="password" type="password" autocomplete="${mode === "signin" ? "current-password" : "new-password"}" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="••••••••"/>`)}
     <button class="btn" id="go">${mode === "signin" ? "Sign in" : "Create account"}</button>
     <div class="switch-line">${mode === "signin" ? `New here? <b id="sw">Create an account</b>` : `Already have one? <b id="sw">Sign in</b>`}</div>
-    <div class="muted" style="text-align:center;margin-top:16px;font-size:11px;letter-spacing:.05em">build 10</div>
+    <div class="muted" style="text-align:center;margin-top:16px;font-size:11px;letter-spacing:.05em">build 11</div>
   </div></div>`;
   document.getElementById("sw").onclick = () => renderAuth(mode === "signin" ? "signup" : "signin");
   document.getElementById("go").onclick = () => (mode === "signin" ? doSignin() : doSignup());
@@ -316,7 +318,7 @@ async function renderLeads() {
       <thead><tr><th>Name</th><th>Tier</th><th>Platform</th><th>Status</th><th>Owner</th><th>Next action</th></tr></thead>
       <tbody>${rows.map((l) => `<tr data-edit="${l.id}" data-name="${esc((l.name || "").toLowerCase())}" data-tier="${l.tier || ""}">
         <td class="name">${esc(l.name)}</td><td>${tierTag(l.tier)}</td><td>${esc(l.platform || "—")}</td>
-        <td><span class="tag ${l.status === "converted" ? "won" : l.status === "form_submitted" ? "hot" : LOST.includes(l.status) ? "lost" : ""}">${lbl(LEAD_STATUS, l.status)}</span></td>
+        <td><span class="tag ${l.status === "won" || l.status === "converted" ? "won" : l.status === "form_submitted" ? "hot" : l.status === "lost" || LOST.includes(l.status) ? "lost" : ""}">${lbl(LEAD_STATUS, l.status)}</span></td>
         <td>${esc(ownerName(l.owner_id))}</td><td class="muted">${esc(l.next_action || "—")}</td></tr>`).join("")}
       </tbody></table></div>`);
     main.querySelectorAll("[data-edit]").forEach((tr) => (tr.onclick = () => leadModal(rows.find((r) => r.id === tr.dataset.edit))));
